@@ -1,0 +1,63 @@
+{
+  "version": "1.0",
+  "description": "Canonical normalized events for agent-status-tracker",
+  "event_type": {
+    "enum": [
+      "run_started",
+      "node_started",
+      "tool_started",
+      "tool_finished",
+      "subagent_started",
+      "artifact_created",
+      "token_usage",
+      "run_finished",
+      "run_failed",
+      "heartbeat"
+    ]
+  },
+  "required_fields": ["event_type", "run_id", "created_at"],
+  "optional_fields": [
+    "thread_id",
+    "session_id",
+    "trace_id",
+    "node",
+    "step",
+    "status",
+    "model",
+    "input_tokens",
+    "output_tokens",
+    "total_tokens",
+    "artifact_path",
+    "result_url",
+    "error"
+  ],
+  "sse_mapping": {
+    "metadata": "run_started",
+    "values": "node_started",
+    "updates": "node_started",
+    "messages": "node_started",
+    "custom": "artifact_created",
+    "error": "run_failed",
+    "end": "run_finished",
+    ": heartbeat": "heartbeat"
+  },
+  "run_journal_mapping": {
+    "run.start": "run_started",
+    "run.end": "run_finished",
+    "run.error": "run_failed",
+    "llm.tool.result": "tool_finished",
+    "middleware:*": "node_started"
+  },
+  "forbidden_payload_keys": [
+    "input",
+    "output",
+    "prompt",
+    "completion",
+    "messages",
+    "content",
+    "raw",
+    "api_key",
+    "secret",
+    "token"
+  ]
+}

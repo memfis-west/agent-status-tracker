@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% from "base.html" import status_badge %}
+
+{% block title %}Run {{ short_run_id }} — Agent Status Tracker{% endblock %}
+{% block body_class %}page-run-detail{% endblock %}
+
+{% block toolbar %}
+<nav class="toolbar" aria-label="Run detail controls">
+  <div class="toolbar-group">
+    <a href="/dashboard" class="back-link">← Dashboard</a>
+    <label>
+      Refresh
+      <select id="refresh-interval" class="refresh-select">
+        <option value="0">off</option>
+        <option value="5000" selected>5 sec</option>
+        <option value="10000">10 sec</option>
+        <option value="30000">30 sec</option>
+        <option value="60000">1 min</option>
+        <option value="300000">5 min</option>
+        <option value="600000">10 min</option>
+      </select>
+    </label>
+    <span class="refresh-meta" id="refresh-status">Auto: …</span>
+    <span class="refresh-meta" id="last-refreshed">Last updated: …</span>
+  </div>
+</nav>
+{% endblock %}
+
+{% block alerts %}
+{% if run.error %}
+<div class="alert-error" role="alert">
+  <strong>Error</strong>
+  {{ run.error }}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="summary-header">
+      {{ status_badge(run.status) }}
+      <span class="summary-title mono" title="{{ run.run_id }}">run {{ short_run_id }}</span>
+    </div>
+    <h2>Summary</h2>
+    <dl class="grid">
+      <dt>run id</dt>
+      <dd class="mono" title="{{ run.run_id }}">{{ short_run_id }}</dd>
+      <dt>thread</dt>
+      <dd class="mono" title="{{ run.thread_id }}">{{ short_thread_id }}</dd>
+      <dt>model</dt>
+      <dd>{{ run.model or '—' }}</dd>
+      <dt>started</dt>
+      <dd>{{ run.started_at or run.created_at or '—' }}</dd>
+      <dt>finished</dt>
+      <dd>{{ run.finished_at or ('—' if run.status == 'running' else run.last_event_at or '—') }}</dd>
+      <dt>duration</dt>
+      <dd class="metric" style="text-align:left">{{ duration_display }}</dd>
+      <dt>tokens</dt>
+      <dd class="metric" style="text-align:left">{{ display_tokens }}</dd>
+      <dt>last update</dt>
+      <dd>{{ run.last_event_at or '—' }}</dd>
+      {% if run.assistant_id %}
+      <dt>assistant</dt>
+      <dd class="mono">{{ run.assistant_id }}</dd>
+      {% endif %}
+      {% if run.agent_folder %}
+      <dt>agent</dt>
+      <dd>{{ run.agent_folder }}</dd>
+      {% endif %}
+      {% if run.current_step %}
+      <dt>step</dt>
+      <dd>{{ run.current_step }}</dd>
+      {% endif %}
+      {% if thread_counts %}
+      <dt>thread state</dt>
+      <dd>{{ thread_counts }}</dd>
+      {% endif %}
+      {% if run.artifact_path or run.result_url %}
+      <dt>result</dt>
+      <dd>
+        {% if run.result_url %}<a href="{{ run.result_url }}">link</a>{% endif %}
+        {% if run.artifact_path %} {{ run.artifact_path }}{% endif %}
+      </dd>
+      {% endif %}
+    </dl>
+    <p class="note">UI-started DeerFlow chats update status via poll (~60s), not live SSE steps.</p>
+</div>
+
+<div class="card">
+  <h2>Timeline{% if timeline %} ({{ timeline|length }}){% endif %}</h2>
+  {% if timeline %}
+  <ul class="timeline">
+    {% for row in timeline %}
+    <li>
+      <span class="t-time">{{ row.time }}</span>
+      <span class="t-badge {{ row.css }}">{{ row.label }}</span>
+      <span class="t-detail">{{ row.detail }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">Пока нет событий — при poll появятся started, смена step/model и финал с ошибкой DeerFlow.</p>
+  {% endif %}
+</div>
+
+{% if host_paths %}
+<details class="card fold">
+  <summary>DeerFlow host paths · {{ agent_display }}</summary>
+  <p class="note" style="margin-top:0.75rem">Пути на хосте для Cursor/terminal. <strong>on disk</strong> — трекер видит файл; <strong>not visible</strong> — нужен ro-mount в docker-compose.</p>
+  <ul class="path-list">
+    {% for item in host_paths %}
+    <li>
+      <span class="path-label">{{ item.label }}</span>
+      {% if item.exists %}<span class="disk-ok">on disk</span>{% else %}<span class="disk-missing">not visible</span>{% endif %}
+      <code class="code-block">{{ item.path }}</code>
+      <button type="button" class="copy-btn" data-copy="{{ item.path }}">Copy</button>
+    </li>
+    {% endfor %}
+  </ul>
+</details>
+{% endif %}
+
+<details class="card fold">
+  <summary>Full IDs</summary>
+  <dl class="grid" style="margin-top:0.75rem">
+    <dt>run_id</dt>
+    <dd><code class="code-block mono">{{ run.run_id }}</code></dd>
+    <dt>thread_id</dt>
+    <dd><code class="code-block mono">{{ run.thread_id }}</code></dd>
+  </dl>
+</details>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.querySelectorAll('.copy-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const text = btn.getAttribute('data-copy') || '';
+      try {
+        await navigator.clipboard.writeText(text);
+        const prev = btn.textContent;
+        btn.textContent = 'Copied';
+        setTimeout(() => { btn.textContent = prev; }, 1200);
+      } catch (e) {
+        btn.textContent = 'Failed';
+      }
+    });
+  });
+</script>
+<script src="/static/refresh.js"></script>
+{% endblock %}

@@ -1,0 +1,12 @@
+services:
+  agent-status-tracker:
+    build: .
+    container_name: agent-status-tracker
+    network_mode: host
+    volumes:
+      - ./data:/data
+      # Read-only: Path.exists() for SOUL.md / user-data (same path as on host)
+      - ${DEERFLOW_DATA_BASE:-/home/memfis/apps/deer-flow/backend/.deer-flow}:${DEERFLOW_DATA_BASE:-/home/memfis/apps/deer-flow/backend/.deer-flow}:ro
+    env_file:
+      - .env
+    restart: unless-stopped

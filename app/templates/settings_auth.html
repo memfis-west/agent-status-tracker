@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>DeerFlow — подключение</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 1.25rem 1.5rem; background: #0f1115; color: #e8eaed; max-width: 36rem; }
+    a { color: #7eb8ff; }
+    h1 { font-size: 1.25rem; margin: 0 0 0.5rem; }
+    .muted { color: #9aa0a6; font-size: 0.88rem; margin-bottom: 1.25rem; }
+    .card { background: #181b22; border: 1px solid #2a2f3a; border-radius: 8px; padding: 1rem 1.1rem; margin-bottom: 1rem; }
+    .card h2 { margin: 0 0 0.75rem; font-size: 0.95rem; color: #9aa0a6; font-weight: 500; }
+    label { display: block; font-size: 0.85rem; color: #9aa0a6; margin-bottom: 0.35rem; }
+    input, textarea { width: 100%; padding: 0.5rem 0.6rem; border: 1px solid #3d4658; border-radius: 4px; background: #0f1115; color: #e8eaed; font-size: 0.9rem; }
+    textarea { min-height: 5rem; font-family: ui-monospace, monospace; font-size: 0.78rem; }
+    button { margin-top: 0.75rem; padding: 0.45rem 0.9rem; cursor: pointer; background: #2a4a7a; color: #e8eaed; border: none; border-radius: 4px; font-size: 0.9rem; }
+    button:hover { background: #355d96; }
+    button.secondary { background: #2a3142; border: 1px solid #3d4658; }
+    .ok { color: #7dffa8; }
+    .bad { color: #ff8a8a; }
+    .msg { font-size: 0.9rem; margin-bottom: 1rem; padding: 0.5rem 0.65rem; border-radius: 4px; background: #1e222a; }
+  </style>
+</head>
+<body>
+  <p><a href="/dashboard">← Dashboard</a></p>
+  <h1>DeerFlow</h1>
+  <p class="muted">Сессия хранится в <code>data/deerflow_session.json</code> (права 600). Переменные в <code>.env</code> по-прежнему имеют приоритет.</p>
+
+  {% if auth.ok %}
+  <p class="msg ok">{{ auth.message }}{% if auth.user_id %} · user {{ auth.user_id[:8] }}…{% endif %} ({{ auth.source }})</p>
+  {% else %}
+  <p class="msg bad">{{ auth.message }}</p>
+  {% endif %}
+
+  {% if flash %}
+  <p class="msg {% if flash_ok %}ok{% else %}bad{% endif %}">{{ flash }}</p>
+  {% endif %}
+
+  <div class="card">
+    <h2>1. Логин (рекомендуется)</h2>
+    <form method="post" action="/settings/auth/login">
+      <label>Email</label>
+      <input type="email" name="email" required autocomplete="username">
+      <label style="margin-top:0.65rem">Пароль</label>
+      <input type="password" name="password" required autocomplete="current-password">
+      <button type="submit">Войти в DeerFlow</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>2. Вставить Cookie (как раньше)</h2>
+    <form method="post" action="/settings/auth/cookie">
+      <label>Cookie из DevTools → Network → Copy as cURL / Cookie</label>
+      <textarea name="cookie" placeholder="access_token=...; csrf_token=...; ..."></textarea>
+      <button type="submit" class="secondary">Сохранить cookie</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>3. JWT / Bearer</h2>
+    <form method="post" action="/settings/auth/bearer">
+      <label>access_token (только значение JWT или полный Bearer)</label>
+      <textarea name="token" placeholder="eyJhbGciOi..."></textarea>
+      <button type="submit" class="secondary">Сохранить token</button>
+    </form>
+  </div>
+
+  <form method="post" action="/settings/auth/logout">
+    <button type="submit" class="secondary">Отключить (удалить сохранённую сессию)</button>
+  </form>
+
+  <p class="muted" style="margin-top:1.5rem">Для продакшена включите <code>BASIC_AUTH_USER</code> / <code>BASIC_AUTH_PASSWORD</code> в .env — иначе страница доступна всем в сети.</p>
+</body>
+</html>

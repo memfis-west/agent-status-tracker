@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Health — Agent Status Tracker{% endblock %}
+
+{% block toolbar %}
+<nav class="toolbar">
+  <a href="/dashboard" class="back-link">← Dashboard</a>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2>Service</h2>
+  <dl class="grid">
+    <dt>status</dt>
+    <dd><span class="badge {% if health.db == 'ok' %}badge-ok{% else %}badge-bad{% endif %}">{{ health.status }}</span></dd>
+    <dt>database</dt>
+    <dd><span class="badge {% if health.db == 'ok' %}badge-ok{% else %}badge-bad{% endif %}">{{ health.db }}</span></dd>
+    <dt>DeerFlow URL</dt>
+    <dd class="mono">{{ health.deerflow_base_url }}</dd>
+    <dt>DB file</dt>
+    <dd class="mono code-block" style="display:inline-block">{{ db_path }}</dd>
+  </dl>
+</div>
+
+<div class="card">
+  <h2>SQLite storage</h2>
+  <dl class="grid">
+    <dt>runs</dt>
+    <dd class="metric" style="text-align:left">{{ health.runs_count }}</dd>
+    <dt>events</dt>
+    <dd class="metric" style="text-align:left">{{ health.events_count }}</dd>
+    <dt>last record</dt>
+    <dd>{{ health.last_record_at or '—' }}</dd>
+    <dt>last run activity</dt>
+    <dd>{{ health.last_run_event_at or '—' }} <span class="muted">(runs.last_event_at)</span></dd>
+    <dt>last event</dt>
+    <dd>{{ health.last_event_created_at or '—' }} <span class="muted">(events.created_at)</span></dd>
+  </dl>
+  <p class="note">JSON API: <a href="/api/health">/api/health</a></p>
+</div>
+{% endblock %}
+
+{% block scripts %}{% endblock %}

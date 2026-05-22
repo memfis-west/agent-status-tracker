@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% from "base.html" import status_badge, section_empty %}
+
+{% block title %}Dashboard — Agent Status Tracker{% endblock %}
+
+{% block toolbar %}
+<nav class="toolbar" aria-label="Dashboard controls">
+  <div class="toolbar-group">
+    <label>
+      Refresh
+      <select id="refresh-interval" class="refresh-select" title="Auto-reload page">
+        <option value="0">off</option>
+        <option value="5000" selected>5 sec</option>
+        <option value="10000">10 sec</option>
+        <option value="30000">30 sec</option>
+        <option value="60000">1 min</option>
+        <option value="300000">5 min</option>
+        <option value="600000">10 min</option>
+      </select>
+    </label>
+    <span class="refresh-meta" id="refresh-status">Auto: …</span>
+    <span class="refresh-meta" id="last-refreshed">Last updated: …</span>
+    <span id="refresh-warning" class="badge badge-warn" role="status">reload issue</span>
+  </div>
+  <div class="toolbar-group toolbar-group--end">
+    <a href="/health" class="badge {% if db_ok %}badge-ok{% else %}badge-bad{% endif %}" title="Tracker DB + API">DB {% if db_ok %}ok{% else %}err{% endif %}</a>
+    <a href="/settings/auth" class="badge {% if auth.ok %}badge-ok{% else %}badge-warn{% endif %}" title="{{ auth.message }}">
+      DeerFlow {% if auth.ok %}connected{% else %}login{% endif %}
+    </a>
+    <a href="/dashboard?synced=1" class="badge badge-action">Sync</a>
+  </div>
+</nav>
+<p class="toolbar-hint">Tokens: active = live from state · finished = snapshot at completion (per run, same method as live)</p>
+{% endblock %}
+
+{% block alerts %}
+{% if not auth.ok %}
+<p class="alert-warn">DeerFlow не подключён — <a href="/settings/auth">войти по email/паролю</a> (без копирования cookie в .env).</p>
+{% endif %}
+{% if synced %}
+<p class="synced-hint">Synced with DeerFlow (import + cleanup).</p>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+{% for section in groups %}
+<section class="section-card">
+  <div class="section-header">
+    <h2>{{ section.label }}</h2>
+    <span class="badge badge-count">{{ section.rows|length }}</span>
+  </div>
+  {% if section.rows %}
+  <div class="table-wrap">
+    <table class="runs-table">
+      <thead>
+        <tr>
+          <th>started</th>
+          <th>{{ section.second_time_col }}</th>
+          <th>status</th>
+          <th>run</th>
+          <th>thread</th>
+          <th class="metric">duration</th>
+          <th class="metric" title="active: live state sum; finished: snapshot when run completed">tokens</th>
+          <th>model</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in section.rows %}
+        <tr>
+          <td>{{ r.display_started }}</td>
+          <td>{{ r.display_second_time }}</td>
+          <td>{{ status_badge(r.status) }}</td>
+          <td>
+            <a href="/runs/{{ r.run_id }}" class="mono" title="{{ r.run_id }}">{{ r.run_id[:8] }}…</a>
+          </td>
+          <td class="mono" title="{{ r.thread_id }}">{{ (r.thread_id or '')[:8] }}…</td>
+          <td class="metric">{{ r.display_duration }}</td>
+          <td class="metric" title="thread total">{{ r.display_tokens }}</td>
+          <td>{{ r.model or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty-state">{{ section_empty(section.label) }}</p>
+  {% endif %}
+</section>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,42 @@
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+*.token
+secrets/
+credentials.json
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Node (if added later)
+node_modules/
+
+# Logs
+logs/
+*.log
+
+# Databases and local data
+*.db
+*.db-*
+data/*.db
+data/*.db-*
+data/deerflow_session.json
+
+# Caches
+.cache/
+*.cache

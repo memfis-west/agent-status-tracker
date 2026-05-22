@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}Agent Status Tracker{% endblock %}</title>
+  <link rel="stylesheet" href="/static/dashboard.css">
+  {% block head_extra %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  <header class="site-header">
+    <h1><a href="/dashboard">Agent Status Tracker</a></h1>
+  </header>
+
+  <main class="container">
+    {% block toolbar %}{% endblock %}
+    {% block alerts %}{% endblock %}
+    {% block content %}{% endblock %}
+  </main>
+
+  {% block scripts %}
+  <script src="/static/refresh.js"></script>
+  {% endblock %}
+</body>
+</html>
+
+{% macro status_badge(status) -%}
+<span class="badge badge-status-{{ status }}">{{ status }}</span>
+{%- endmacro %}
+
+{% macro section_empty(label) -%}
+{% if label == 'active' %}No active runs
+{% elif label == 'stale' %}No stale runs
+{% elif label == 'failed' %}No failed runs
+{% elif label == 'finished' %}No finished runs
+{% else %}No runs
+{% endif %}
+{%- endmacro %}
