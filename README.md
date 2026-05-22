@@ -1,36 +1,45 @@
 # agent-status-tracker
 
-Lightweight operational monitor for **DeerFlow** agent runs (port **8090**). Not Langfuse — no prompt archive, no full trace UI.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
 
-## Features
+**Lightweight operational monitor for [DeerFlow](https://github.com/bytedance/deer-flow) agent runs** — dashboard on port **8090**, SQLite storage, no Langfuse.
 
-| Area | What you get |
-|------|----------------|
-| Status | `queued`, `running`, `tool`, `subagent`, `finished`, `failed`, `stale` |
-| UI | Dashboard + run detail (Jinja2, dark theme) |
-| Mode A | `POST /watch/start` — create/watch run via SSE |
-| Mode B | Poll DeerFlow threads (UI chats, backfill) |
-| Tokens | Active: live from thread state · Finished: per-run snapshot at completion |
-| Alerts | Optional ntfy on finish / fail / stale |
-| Storage | SQLite (`data/status.db`), privacy-safe events |
+Repository: [github.com/memfis-west/agent-status-tracker](https://github.com/memfis-west/agent-status-tracker)
 
-## Requirements
+## What it does
 
-- Python 3.12+ or Docker
-- DeerFlow at `DEERFLOW_BASE_URL` (default `http://127.0.0.1:2026`)
-- DeerFlow auth: cookie, bearer, or email/password via `/settings/auth`
+| Area | Description |
+|------|-------------|
+| **Statuses** | `queued`, `running`, `tool`, `subagent`, `finished`, `failed`, `stale` |
+| **UI** | Web dashboard + run detail (Jinja2, no React build) |
+| **Watch (SSE)** | Start a run and stream status from DeerFlow |
+| **Poll** | Sync runs started in DeerFlow UI (no browser SSE) |
+| **Tokens** | Active: live from thread state · Finished: per-run snapshot at completion |
+| **Alerts** | Optional [ntfy](https://ntfy.sh) on finish / fail / stale |
+| **Privacy** | No prompts/completions in DB by default |
+
+## What it does not do
+
+- Langfuse-style traces, prompt archive, token streams
+- Per-message token breakdown (thread-level / run snapshot only)
+- Auto-delete when you remove a chat in DeerFlow (use **Sync**)
 
 ## Quick start (Docker)
 
 ```bash
+git clone git@github.com:memfis-west/agent-status-tracker.git
+cd agent-status-tracker
 cp .env.example .env
-# edit .env — at minimum DeerFlow auth
+# Edit .env — DeerFlow auth (see below)
 docker compose up --build -d
 curl -s http://127.0.0.1:8090/api/health | jq .
-open http://127.0.0.1:8090/dashboard
 ```
 
-Uses **`network_mode: host`** so the container can reach DeerFlow on `127.0.0.1:2026` (Linux).
+Open **http://127.0.0.1:8090/dashboard** (and **/settings/auth** for DeerFlow login).
+
+Uses **`network_mode: host`** on Linux so the container can reach DeerFlow at `127.0.0.1:2026`.
 
 ## Quick start (local)
 
@@ -44,85 +53,71 @@ export TRACKER_DB_PATH=./data/status.db
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8090
 ```
 
-## Project layout
+## DeerFlow authentication
 
-```text
-app/
-  main.py              # FastAPI routes, dashboard
-  db.py                # SQLite
-  constants.py         # status sets, timeline labels
-  notifications.py     # ntfy dedupe
-  stale.py             # background stale + sync loop
-  sync.py              # import/prune vs DeerFlow
-  templates/           # dashboard, run detail, health, auth
-  static/              # dashboard.css, refresh.js
-watcher/
-  deerflow_client.py   # DeerFlow HTTP API
-  poll_client.py       # passive sync
-  sse_client.py        # live watch
-  event_mapper.py      # SSE → normalized events
-tests/
-scripts/check_privacy.py
-```
+| Method | When |
+|--------|------|
+| **Web UI** | `http://127.0.0.1:8090/settings/auth` — email/password, session in `data/deerflow_session.json` (chmod 600) |
+| **Env bootstrap** | `DEERFLOW_LOGIN_EMAIL` + `DEERFLOW_LOGIN_PASSWORD` on container start |
+| **Env override** | `DEERFLOW_AUTH_COOKIE` or `DEERFLOW_BEARER_TOKEN` in `.env` |
+| **Tracker Basic auth** | `BASIC_AUTH_USER` / `BASIC_AUTH_PASSWORD` — recommended on LAN |
 
-## Dashboard sections
+Never commit `.env` or session files.
 
-| Section | Runs | Columns |
-|---------|------|---------|
-| **active** | `queued`, `running`, `tool`, `subagent` | started · **updated** · status · run · thread · duration · tokens · model |
-| **stale** | tracker marked inactive (see below) | started · **updated** · … |
-| **failed** | terminal fail | started · **finished** · … |
-| **finished** | terminal ok | started · **finished** · … |
+## Dashboard
 
-**Tokens:** `· live` on active = sum from LangGraph `state.messages`. Finished rows use a **snapshot** taken when that run completed (same method), not a shared thread total on every row.
+| Section | Meaning |
+|---------|---------|
+| **active** | Runs still in progress |
+| **stale** | No tracker events for `STALE_AFTER_SECONDS` (default 10 min) |
+| **failed** / **finished** | Terminal runs (latest 30 each) |
 
-## Stale logic
+Columns: **started** · **updated** or **finished** · status · run · thread · duration · tokens · model.
 
-A run becomes **`stale`** when:
+- **Tokens `· live`** — sum from LangGraph `state.messages` while run is active.
+- **Finished tokens** — snapshot when that run completed (not duplicated thread total on every row).
 
-1. Tracker still has status in `queued` / `running` / `tool` / `subagent`, and  
-2. `last_event_at` is older than `STALE_AFTER_SECONDS` (default **600**).
+Background **Sync** (or every ~60s in stale loop) imports UI chats and removes runs for deleted DeerFlow threads.
 
-Background loop (`stale_loop`) every `STALE_CHECK_INTERVAL_SECONDS` (default **60**):
+## Configuration
 
-1. `sync_deerflow_threads` (import + prune deleted threads)  
-2. `mark_stale_runs`  
-3. ntfy for new stale runs (if configured)
+Copy [`.env.example`](.env.example). Main variables:
 
-Stale is **tracker silence**, not necessarily DeerFlow failure. Long tools without poll/SSE updates can false-positive — increase `STALE_AFTER_SECONDS`.
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `DEERFLOW_BASE_URL` | `http://127.0.0.1:2026` | DeerFlow API |
+| `DEERFLOW_DATA_BASE` | — | Host paths on run detail (mount ro in Docker) |
+| `STALE_AFTER_SECONDS` | `600` | Mark run stale after silence |
+| `STALE_CHECK_INTERVAL_SECONDS` | `60` | Background sync + stale check |
+| `DEERFLOW_THREAD_SEARCH_LIMIT` | `50` | Threads per sync |
+| `NTFY_SERVER` / `NTFY_TOPIC` | empty | Push notifications |
 
-Next poll from DeerFlow can move the run back to `running` / `finished`.
+## HTTP API (summary)
 
-## Sync with DeerFlow
+| Method | Path | Auth |
+|--------|------|------|
+| GET | `/health`, `/api/health` | — |
+| GET | `/dashboard`, `/runs/{id}` | Basic* |
+| GET | `/settings/auth` | Basic* |
+| POST | `/watch/start` | Basic* |
+| POST | `/watch/thread/{id}/poll` | Basic* |
+| POST | `/sync/deerflow` | Basic* |
 
-Tracker DB is **not** auto-deleted when you delete a chat in DeerFlow UI.
+\* Optional HTTP Basic when set in `.env`.
 
-- Dashboard → **Sync**, or `POST /sync/deerflow`  
-- Background: same sync inside stale loop (~every 60s)  
-- Per thread: `POST /watch/thread/{thread_id}/poll`
+<details>
+<summary>Full API list</summary>
 
-Sync discovers threads via `POST /api/threads/search` (limit `DEERFLOW_THREAD_SEARCH_LIMIT`, default 50), polls each, removes runs for 404 threads.
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/api/runs` | List runs |
+| GET | `/runs/{id}/detail` | Run + events JSON |
+| POST | `/runs/{id}/finish` | Manual finish |
+| POST | `/runs/{id}/fail` | Manual fail |
 
-## HTTP API
+</details>
 
-| Method | Path | Auth | Notes |
-|--------|------|------|-------|
-| GET | `/health` | — | HTML status + DB stats |
-| GET | `/api/health` | — | JSON |
-| GET | `/dashboard` | Basic* | Main UI |
-| GET | `/runs/{id}` | Basic* | Run detail |
-| GET | `/api/runs` | Basic* | List runs |
-| GET | `/runs/{id}/detail` | Basic* | Run + events JSON |
-| POST | `/watch/start` | Basic* | Start SSE watch |
-| POST | `/watch/thread/{id}/poll` | Basic* | Poll one thread |
-| POST | `/sync/deerflow` | Basic* | Import + prune |
-| POST | `/runs/{id}/finish` | Basic* | Manual finish |
-| POST | `/runs/{id}/fail` | Basic* | Manual fail |
-| GET | `/settings/auth` | Basic* | DeerFlow login UI |
-
-\* Basic = optional `BASIC_AUTH_USER` / `BASIC_AUTH_PASSWORD` when set in `.env`.
-
-### Watch start example
+### Watch example
 
 ```bash
 curl -u user:pass -X POST http://127.0.0.1:8090/watch/start \
@@ -134,58 +129,27 @@ curl -u user:pass -X POST http://127.0.0.1:8090/watch/start \
   }'
 ```
 
-Response `status` is **`queued`** until SSE assigns the real `run_id`. `dashboard_url` may point at `pending-{thread_prefix}`.
+## Host paths (run detail)
 
-## ntfy
+When `DEERFLOW_DATA_BASE` is set and mounted read-only in Docker, each run page shows copyable paths:
 
-Set `NTFY_SERVER` and `NTFY_TOPIC`. Notifications (no prompt text):
+- `{DEERFLOW_DATA_BASE}/users/{user_id}/agents/{agent}/SOUL.md`
+- `.../threads/{thread_id}/user-data`
 
-| Status | When |
-|--------|------|
-| finished | SSE end, manual finish |
-| failed | SSE error, manual fail |
-| stale | stale loop |
+`user_id` from JWT in session or `DEERFLOW_USER_ID`.
 
-Poll-only finish does **not** send ntfy unless you add it later.
+## Project layout
 
-## DeerFlow auth
-
-1. **Recommended:** `http://127.0.0.1:8090/settings/auth` — email/password → `data/deerflow_session.json` (mode 600)  
-2. `DEERFLOW_LOGIN_EMAIL` + `DEERFLOW_LOGIN_PASSWORD` in `.env` — bootstrap on start  
-3. `DEERFLOW_AUTH_COOKIE` / `DEERFLOW_BEARER_TOKEN` in `.env`  
-4. Enable **Basic auth** on the tracker if exposed on LAN  
-
-## Configuration (`.env`)
-
-See `.env.example`. Important keys:
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `STALE_AFTER_SECONDS` | 600 | Inactivity → stale |
-| `STALE_CHECK_INTERVAL_SECONDS` | 60 | Background loop period |
-| `DEERFLOW_THREAD_SEARCH_LIMIT` | 50 | Threads per sync |
-| `DEERFLOW_DATA_BASE` | — | Host paths on run detail (ro-mount in Docker) |
-| `TRACKER_STREAM_MODES` | updates,custom,messages-tuple | SSE modes (`tools` stripped) |
-
-`TRACKER_PORT` affects local `python -m app.main` only; Docker CMD uses port **8090** fixed.
-
-## Resource usage (typical)
-
-~**80 MiB** RAM, CPU ~0.2% idle, short spikes during sync/poll. SQLite grows with events; manual retention:
-
-```sql
-DELETE FROM events WHERE created_at < datetime('now', '-30 days');
-DELETE FROM runs WHERE status IN ('finished', 'failed')
-  AND updated_at < datetime('now', '-30 days');
+```text
+app/           FastAPI, SQLite, templates, static CSS/JS
+watcher/       DeerFlow client, SSE watch, poll sync
+tests/         pytest
+scripts/       check_privacy.py
 ```
 
-## Privacy
+## Resource usage
 
-```bash
-python scripts/check_privacy.py --db ./data/status.db --needle "secret phrase"
-```
-
-`STORE_PAYLOADS=false` by default — events store metadata only.
+Typical Docker footprint: **~80 MiB RAM**, CPU near idle with short spikes on sync (~60s).
 
 ## Tests
 
@@ -194,19 +158,28 @@ pip install -r requirements-dev.txt
 pytest tests/ -q
 ```
 
+## Privacy check
+
+```bash
+python scripts/check_privacy.py --db ./data/status.db --needle "phrase-from-prompt"
+```
+
+`STORE_PAYLOADS=false` by default.
+
 ## Troubleshooting
 
-| Issue | Action |
-|-------|--------|
-| 401 DeerFlow | `/settings/auth` or `.env` cookie/bearer |
-| Docker cannot reach DeerFlow | `network_mode: host` or fix `DEERFLOW_BASE_URL` |
-| Run stuck `running` | Poll thread; check SSE auth |
-| False stale | Increase `STALE_AFTER_SECONDS` |
-| Same tokens on old finished rows | Re-poll thread to refresh snapshots |
-| Health page | `/health` (HTML) · `/api/health` (JSON) |
+| Issue | Fix |
+|-------|-----|
+| DeerFlow 401 | `/settings/auth` or valid cookie/bearer in `.env` |
+| Docker cannot reach DeerFlow | `network_mode: host` or correct `DEERFLOW_BASE_URL` |
+| Run stuck `running` | `POST /watch/thread/{id}/poll` |
+| False **stale** | Increase `STALE_AFTER_SECONDS` |
+| Old finished rows show same tokens | Re-poll thread to refresh snapshots |
 
-## What this is not
+## License
 
-- Langfuse / full observability  
-- Per-message token UI (thread-level / snapshot only)  
-- Automatic GDPR purge  
+[MIT](LICENSE) — Copyright (c) 2026 memfis-west
+
+## Suggested GitHub topics
+
+`deerflow`, `fastapi`, `langgraph`, `sqlite`, `monitoring`, `agent-ops`, `self-hosted`
