@@ -551,6 +551,97 @@ details.fold[open] > summary::before {
   font-size: 0.88rem;
 }
 
+.page-run-detail .card {
+  min-width: 0;
+}
+
+.agent-output-card {
+  overflow: hidden;
+}
+
+.agent-output-fold {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-top: 0.65rem;
+  min-width: 0;
+  max-width: 100%;
+  background: var(--panel-2);
+}
+
+.agent-output-fold > summary {
+  padding: 0.55rem 0.85rem;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 500;
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  user-select: none;
+}
+
+.agent-output-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.agent-output-fold-title::before {
+  content: "▸ ";
+  color: var(--muted);
+}
+
+.agent-output-fold[open] .agent-output-fold-title::before {
+  content: "▾ ";
+}
+
+.agent-output-fold-meta {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 400;
+  flex-shrink: 0;
+}
+
+.agent-output-fold-body {
+  padding: 0 0.85rem 0.75rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.agent-text {
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-sizing: border-box;
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  max-height: min(24rem, 55vh);
+  overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.agent-text-meta {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+}
+
+.agent-text-muted {
+  margin: 0.65rem 0 0;
+  font-size: 0.88rem;
+}
+
+.agent-output-note {
+  margin-top: 0.85rem;
+  margin-bottom: 0;
+}
+
 @media (max-width: 640px) {
   .container {
     padding: 0.75rem 0.85rem 1.5rem;

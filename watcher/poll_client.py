@@ -15,6 +15,7 @@ from app.sanitize import (
     progress_counts_snapshot,
     truncate_text,
 )
+from app.agent_text import sync_agent_text_from_state
 from watcher.deerflow_client import DeerflowClient
 
 logger = logging.getLogger(__name__)
@@ -150,6 +151,9 @@ class PollClient:
         runs = await self.client.list_runs(thread_id)
         apath, rurl = await self.client.get_state_refs(thread_id)
         progress = await self.client.get_thread_progress(thread_id)
+        state_for_agent: dict[str, Any] | None = None
+        if self.settings.store_thinking_enabled or self.settings.store_final_answer_enabled:
+            state_for_agent = await self.client.get_thread_state(thread_id)
         agent_name = progress.get("agent_name")
         agent_folder = agent_name_to_folder(str(agent_name) if agent_name else None)
         cookie, bearer = effective_auth(self.settings)
@@ -310,6 +314,16 @@ class PollClient:
                             thread_id,
                             e,
                         )
+
+            if state_for_agent is not None:
+                await sync_agent_text_from_state(
+                    self.db,
+                    self.settings,
+                    run_id=run_id,
+                    thread_id=thread_id,
+                    state=state_for_agent,
+                    terminal=status in ("finished", "failed"),
+                )
 
             updated.append(run_id)
 

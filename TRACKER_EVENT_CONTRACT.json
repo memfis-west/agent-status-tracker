@@ -48,6 +48,15 @@
     "llm.tool.result": "tool_finished",
     "middleware:*": "node_started"
   },
+  "run_level_agent_text": {
+    "description": "Optional columns on runs table (not in events stream)",
+    "fields": ["last_thinking", "last_thinking_at", "final_answer", "final_answer_at"],
+    "sources": {
+      "last_thinking": "AI additional_kwargs.reasoning_content + SSE normalized status",
+      "final_answer": "Last visible AI message content from thread state on terminal"
+    },
+    "env": ["STORE_LAST_THINKING", "STORE_FINAL_ANSWER", "STORE_AGENT_TEXT", "MAX_AGENT_TEXT_CHARS"]
+  },
   "forbidden_payload_keys": [
     "input",
     "output",

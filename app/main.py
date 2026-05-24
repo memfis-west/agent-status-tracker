@@ -432,6 +432,10 @@ def _enrich_dashboard_row(
         row["display_tokens"] = "pending"
     else:
         row["display_tokens"] = "—"
+    if run.get("last_thinking"):
+        row["has_thinking"] = True
+    if run.get("final_answer"):
+        row["has_answer"] = True
     return row
 
 
@@ -584,8 +588,29 @@ async def run_detail_page(
             "display_tokens": _format_token_count(run.get("total_tokens") or None),
             "host_paths": host_paths,
             "agent_display": agent_folder or run.get("assistant_id") or "—",
+            "store_thinking_enabled": settings.store_thinking_enabled,
+            "store_final_answer_enabled": settings.store_final_answer_enabled,
         },
     )
+
+
+@app.get("/runs/{run_id}/agent-output")
+async def get_run_agent_output(run_id: str, _: None = Depends(require_auth)):
+    settings = get_settings()
+    db = get_db()
+    run = await db.get_run(run_id)
+    if not run:
+        raise HTTPException(404, "Run not found")
+    return {
+        "run_id": run_id,
+        "thread_id": run.get("thread_id"),
+        "last_thinking": run.get("last_thinking"),
+        "last_thinking_at": run.get("last_thinking_at"),
+        "final_answer": run.get("final_answer"),
+        "final_answer_at": run.get("final_answer_at"),
+        "store_last_thinking_enabled": settings.store_thinking_enabled,
+        "store_final_answer_enabled": settings.store_final_answer_enabled,
+    }
 
 
 @app.get("/api/runs")

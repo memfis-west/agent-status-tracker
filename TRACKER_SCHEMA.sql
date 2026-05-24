@@ -30,7 +30,11 @@ CREATE TABLE IF NOT EXISTS runs (
     duration_sec    INTEGER,
     deerflow_user_id TEXT,
     agent_folder    TEXT,
-    progress_snapshot TEXT
+    progress_snapshot TEXT,
+    last_thinking   TEXT,
+    last_thinking_at TEXT,
+    final_answer    TEXT,
+    final_answer_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_runs_thread ON runs(thread_id);

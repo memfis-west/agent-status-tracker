@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     max_text_field_chars: int = 500
     max_payload_chars: int = 4000
 
+    store_agent_text: bool = False
+    store_last_thinking: bool = True
+    store_final_answer: bool = False
+    max_agent_text_chars: int = 4000
+
     ntfy_server: str = ""
     ntfy_topic: str = ""
 
@@ -55,6 +60,14 @@ class Settings(BaseSettings):
     @property
     def basic_auth_enabled(self) -> bool:
         return bool(self.basic_auth_user.strip() and self.basic_auth_password.strip())
+
+    @property
+    def store_thinking_enabled(self) -> bool:
+        return self.store_agent_text or self.store_last_thinking
+
+    @property
+    def store_final_answer_enabled(self) -> bool:
+        return self.store_agent_text or self.store_final_answer
 
     def _csrf_from_cookie(self, cookie: str) -> str | None:
         if not cookie:

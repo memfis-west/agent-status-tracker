@@ -55,6 +55,10 @@ class Database:
             "ALTER TABLE runs ADD COLUMN deerflow_user_id TEXT",
             "ALTER TABLE runs ADD COLUMN agent_folder TEXT",
             "ALTER TABLE runs ADD COLUMN progress_snapshot TEXT",
+            "ALTER TABLE runs ADD COLUMN last_thinking TEXT",
+            "ALTER TABLE runs ADD COLUMN last_thinking_at TEXT",
+            "ALTER TABLE runs ADD COLUMN final_answer TEXT",
+            "ALTER TABLE runs ADD COLUMN final_answer_at TEXT",
         ]
         for stmt in migrations:
             try:
@@ -499,6 +503,52 @@ class Database:
             (key,),
         ) as cur:
             return await cur.fetchone() is not None
+
+    async def update_last_thinking(
+        self,
+        run_id: str,
+        thread_id: str,
+        text: str,
+        *,
+        at: str | None = None,
+        max_chars: int = 4000,
+    ) -> None:
+        assert self._conn
+        cleaned = truncate_text(text, max_chars)
+        if not cleaned:
+            return
+        ts = at or utc_now()
+        await self._conn.execute(
+            """
+            UPDATE runs SET last_thinking = ?, last_thinking_at = ?, updated_at = ?
+            WHERE run_id = ? AND thread_id = ?
+            """,
+            (cleaned, ts, utc_now(), run_id, thread_id),
+        )
+        await self._conn.commit()
+
+    async def update_final_answer(
+        self,
+        run_id: str,
+        thread_id: str,
+        text: str,
+        *,
+        at: str | None = None,
+        max_chars: int = 4000,
+    ) -> None:
+        assert self._conn
+        cleaned = truncate_text(text, max_chars)
+        if not cleaned:
+            return
+        ts = at or utc_now()
+        await self._conn.execute(
+            """
+            UPDATE runs SET final_answer = ?, final_answer_at = ?, updated_at = ?
+            WHERE run_id = ? AND thread_id = ?
+            """,
+            (cleaned, ts, utc_now(), run_id, thread_id),
+        )
+        await self._conn.commit()
 
     async def delete_run(self, run_id: str) -> bool:
         assert self._conn

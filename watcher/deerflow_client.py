@@ -126,6 +126,9 @@ class DeerflowClient:
             return data["threads"]
         return []
 
+    async def get_thread_state(self, thread_id: str) -> dict[str, Any] | None:
+        return await self._get_thread_state(thread_id)
+
     async def _get_thread_state(self, thread_id: str) -> dict[str, Any] | None:
         if self._state_cache is not None and thread_id in self._state_cache:
             return self._state_cache[thread_id]

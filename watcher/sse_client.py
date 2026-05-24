@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from app.agent_text import finalize_final_answer_from_state, sync_agent_text_from_sse
 from app.db import Database
 from app.settings import Settings
 from watcher.deerflow_client import DeerflowClient
@@ -144,6 +145,16 @@ class SSEWatcher:
                                         await self.db.delete_run(provisional_run_id)
                                         provisional_run_id = None
                                 await self.db.apply_normalized_event(norm, payload_meta=pmeta)
+                                if run_id:
+                                    await sync_agent_text_from_sse(
+                                        self.db,
+                                        self.settings,
+                                        run_id=run_id,
+                                        thread_id=thread_id,
+                                        event_name=msg.event or "",
+                                        data=data,
+                                        norm=norm,
+                                    )
                 if run_id:
                     run = await self.db.get_run(run_id)
                     if run and run["status"] in ("running", "tool", "subagent", "queued"):
@@ -155,5 +166,12 @@ class SSEWatcher:
             await self.db.delete_run(provisional_run_id)
         if run_id:
             await self.db.delete_pending_runs(thread_id)
+            await finalize_final_answer_from_state(
+                self.db,
+                self.settings,
+                self.client,
+                run_id=run_id,
+                thread_id=thread_id,
+            )
 
         return run_id, thread_id

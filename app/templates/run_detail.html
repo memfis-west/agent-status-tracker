@@ -86,6 +86,50 @@
     <p class="note">UI-started DeerFlow chats update status via poll (~60s), not live SSE steps.</p>
 </div>
 
+<div class="card agent-output-card">
+  <h2>Agent output</h2>
+
+  {% if run.last_thinking %}
+  <details class="agent-output-fold">
+    <summary>
+      <span class="agent-output-fold-title">Last thinking</span>
+      <span class="agent-output-fold-meta">{{ run.last_thinking|length }} chars</span>
+    </summary>
+    <div class="agent-output-fold-body">
+      <pre class="agent-text">{{ run.last_thinking }}</pre>
+      {% if run.last_thinking_at %}
+      <p class="agent-text-meta muted">updated {{ run.last_thinking_at }}</p>
+      {% endif %}
+    </div>
+  </details>
+  {% elif store_thinking_enabled %}
+  <p class="agent-text-muted muted">No operational thinking captured yet.</p>
+  {% else %}
+  <p class="agent-text-muted muted">Thinking storage disabled (set STORE_LAST_THINKING=true).</p>
+  {% endif %}
+
+  {% if run.final_answer %}
+  <details class="agent-output-fold" open>
+    <summary>
+      <span class="agent-output-fold-title">Final answer</span>
+      <span class="agent-output-fold-meta">{{ run.final_answer|length }} chars</span>
+    </summary>
+    <div class="agent-output-fold-body">
+      <pre class="agent-text">{{ run.final_answer }}</pre>
+      {% if run.final_answer_at %}
+      <p class="agent-text-meta muted">captured {{ run.final_answer_at }}</p>
+      {% endif %}
+    </div>
+  </details>
+  {% elif store_final_answer_enabled %}
+  <p class="agent-text-muted muted">No final answer yet — captured from thread state when the run finishes.</p>
+  {% else %}
+  <p class="agent-text-muted muted">Final answer storage disabled (set STORE_FINAL_ANSWER=true or STORE_AGENT_TEXT=true).</p>
+  {% endif %}
+
+  <p class="note agent-output-note">Thinking uses DeerFlow <code>reasoning_content</code> (model reasoning). Final answer is the last visible AI reply from thread state, not stream chunks.</p>
+</div>
+
 <div class="card">
   <h2>Timeline{% if timeline %} ({{ timeline|length }}){% endif %}</h2>
   {% if timeline %}

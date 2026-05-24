@@ -17,14 +17,16 @@ Repository: [github.com/memfis-west/agent-status-tracker](https://github.com/mem
 | **Watch (SSE)** | Start a run and stream status from DeerFlow |
 | **Poll** | Sync runs started in DeerFlow UI (no browser SSE) |
 | **Tokens** | Active: live from thread state · Finished: per-run snapshot at completion |
+| **Agent output** | Opt-in `last_thinking` + `final_answer` on run detail (see below) |
 | **Alerts** | Optional [ntfy](https://ntfy.sh) on finish / fail / stale |
-| **Privacy** | No prompts/completions in DB by default |
+| **Privacy** | No full chat history in DB; agent text fields are sanitized and truncated |
 
 ## What it does not do
 
 - Langfuse-style traces, prompt archive, token streams
 - Per-message token breakdown (thread-level / run snapshot only)
 - Auto-delete when you remove a chat in DeerFlow (use **Sync**)
+- Store raw SSE payloads or user prompts by default
 
 ## Quick start (Docker)
 
@@ -79,6 +81,17 @@ Columns: **started** · **updated** or **finished** · status · run · thread �
 
 Background **Sync** (or every ~60s in stale loop) imports UI chats and removes runs for deleted DeerFlow threads.
 
+## Run detail: Agent output
+
+On **`/runs/{run_id}`**, card **Agent output** shows two collapsible blocks:
+
+| Block | Source | Default UI |
+|-------|--------|------------|
+| **Last thinking** | DeerFlow `reasoning_content` on AI messages (same as UI “Thinking”), plus live SSE status fallback (`Node started`, `Tool started`, …) | Collapsed |
+| **Final answer** | Last visible AI reply from `state.values.messages` on terminal poll/finish | Expanded |
+
+Long paths and prose wrap inside the block (`overflow-wrap: anywhere`). No raw `messages` array or `STORE_PAYLOADS` content is stored.
+
 ## Configuration
 
 Copy [`.env.example`](.env.example). Main variables:
@@ -90,6 +103,11 @@ Copy [`.env.example`](.env.example). Main variables:
 | `STALE_AFTER_SECONDS` | `600` | Mark run stale after silence |
 | `STALE_CHECK_INTERVAL_SECONDS` | `60` | Background sync + stale check |
 | `DEERFLOW_THREAD_SEARCH_LIMIT` | `50` | Threads per sync |
+| `STORE_LAST_THINKING` | `true` | Save sanitized thinking / reasoning text |
+| `STORE_FINAL_ANSWER` | `false` | Save final assistant reply at run completion |
+| `STORE_AGENT_TEXT` | `false` | Enables both text fields when `true` |
+| `MAX_AGENT_TEXT_CHARS` | `4000` | Truncate `last_thinking` / `final_answer` |
+| `STORE_PAYLOADS` | `false` | Raw SSE payloads in `events.payload_meta` |
 | `NTFY_SERVER` / `NTFY_TOPIC` | empty | Push notifications |
 
 ## HTTP API (summary)
@@ -102,6 +120,7 @@ Copy [`.env.example`](.env.example). Main variables:
 | POST | `/watch/start` | Basic* |
 | POST | `/watch/thread/{id}/poll` | Basic* |
 | POST | `/sync/deerflow` | Basic* |
+| GET | `/runs/{id}/agent-output` | Basic* |
 
 \* Optional HTTP Basic when set in `.env`.
 
@@ -112,6 +131,7 @@ Copy [`.env.example`](.env.example). Main variables:
 |--------|------|-------|
 | GET | `/api/runs` | List runs |
 | GET | `/runs/{id}/detail` | Run + events JSON |
+| GET | `/runs/{id}/agent-output` | `last_thinking`, `final_answer`, enabled flags |
 | POST | `/runs/{id}/finish` | Manual finish |
 | POST | `/runs/{id}/fail` | Manual fail |
 
@@ -129,6 +149,14 @@ curl -u user:pass -X POST http://127.0.0.1:8090/watch/start \
   }'
 ```
 
+### Agent output example
+
+```bash
+# Enable final answer in .env: STORE_FINAL_ANSWER=true
+curl -s http://127.0.0.1:8090/runs/{run_id}/agent-output | jq .
+curl -X POST http://127.0.0.1:8090/watch/thread/{thread_id}/poll
+```
+
 ## Host paths (run detail)
 
 When `DEERFLOW_DATA_BASE` is set and mounted read-only in Docker, each run page shows copyable paths:
@@ -141,10 +169,22 @@ When `DEERFLOW_DATA_BASE` is set and mounted read-only in Docker, each run page 
 ## Project layout
 
 ```text
-app/           FastAPI, SQLite, templates, static CSS/JS
-watcher/       DeerFlow client, SSE watch, poll sync
-tests/         pytest
-scripts/       check_privacy.py
+app/
+  agent_text.py   Thinking / final-answer extraction (privacy-safe)
+  main.py         FastAPI routes
+  db.py           SQLite + migrations
+  settings.py     Env config
+  templates/      dashboard, run_detail (collapsible agent output)
+  static/         dashboard.css, refresh.js
+watcher/
+  sse_client.py   SSE watch + live thinking
+  poll_client.py  UI-started run sync + terminal snapshots
+  deerflow_client.py
+tests/
+  test_agent_text.py
+scripts/
+  check_privacy.py
+  verify_agent_output_live.py   Live DeerFlow verification helper
 ```
 
 ## Resource usage
@@ -158,13 +198,28 @@ pip install -r requirements-dev.txt
 pytest tests/ -q
 ```
 
-## Privacy check
+## Privacy
+
+- `STORE_PAYLOADS=false` by default — no raw event bodies in DB.
+- Agent text uses **sanitized** fields only; user/human messages and tool dumps are not copied into `last_thinking`.
+- `final_answer` is taken from thread **state** on completion, not from SSE stream chunks.
 
 ```bash
-python scripts/check_privacy.py --db ./data/status.db --needle "phrase-from-prompt"
+python scripts/check_privacy.py --db ./data/status.db --needle "access_token="
 ```
 
-`STORE_PAYLOADS=false` by default.
+## Agent output (behavior)
+
+| Mode | `last_thinking` | `final_answer` |
+|------|-----------------|----------------|
+| **SSE watch** | Live: `reasoning_content` chunks + normalized node/tool status | After run ends: last AI `content` from state |
+| **Poll (UI chat)** | On sync: joined `reasoning_content` from state | Terminal only, if `STORE_FINAL_ANSWER=true` |
+
+Set `STORE_FINAL_ANSWER=true` (or `STORE_AGENT_TEXT=true`) to persist final replies. Re-poll a thread to backfill finished runs:
+
+```bash
+curl -X POST http://127.0.0.1:8090/watch/thread/{thread_id}/poll
+```
 
 ## Troubleshooting
 
@@ -175,6 +230,8 @@ python scripts/check_privacy.py --db ./data/status.db --needle "phrase-from-prom
 | Run stuck `running` | `POST /watch/thread/{id}/poll` |
 | False **stale** | Increase `STALE_AFTER_SECONDS` |
 | Old finished rows show same tokens | Re-poll thread to refresh snapshots |
+| Empty **Last thinking** on UI run | Ensure `STORE_LAST_THINKING=true`, then poll thread |
+| **Final answer** empty | Set `STORE_FINAL_ANSWER=true`, poll after run is `finished` |
 
 ## License
 

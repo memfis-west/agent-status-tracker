@@ -25,6 +25,8 @@ TEXT_COLUMNS = {
         "error",
         "artifact_path",
         "result_url",
+        "last_thinking",
+        "final_answer",
     ],
     "events": [
         "run_id",
